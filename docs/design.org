@@ -36,6 +36,7 @@ implementation starts after the design is approved; see [[Implementation plan]].
 | 5 | Distribution        | Claude Code plugin in a private marketplace (this repository)       |
 | 6 | Mobile              | Remote Control of a local CLI session                               |
 | 7 | Hierarchy           | Flat: only the orchestrator delegates; workers have no =Agent= tool |
+| 8 | Documentation       | Org-mode is the source; Markdown copies are generated for mobile    |
 
 * Architecture overview
 #+begin_example
@@ -295,6 +296,25 @@ claude --agent orchestrator     # then run /remote-control in the session
 
 The machine has to stay on while you steer the session from the phone.
 
+* Documentation format
+All human-facing documents are written in org-mode. The Claude mobile app
+and GitHub's mobile view do not render org well, so every =.org= file gets
+a generated =.md= copy next to it (=README.org= → =README.md=,
+=docs/design.org= → =docs/design.md=).
+
+- Generator: =tools/build-docs.sh=, which runs pandoc with the Lua filter
+  =tools/org-links.lua=. The filter turns in-file heading links
+  (=[[Heading]]=) into working GitHub anchors, umlauts included.
+- The =.md= files carry a "Generated … Do not edit" header. Changes are
+  always made in the =.org= file, then =tools/build-docs.sh= is run and
+  both files are committed together.
+- CI (=.github/workflows/docs.yml=) runs =tools/build-docs.sh --check= and
+  fails if a Markdown copy is out of date.
+- The repository's =CLAUDE.md= states this rule, so agents working on this
+  repository follow it too.
+- Run files (see [[Run state]]) are working files, not documentation, and
+  stay org-only.
+
 * Repository layout
 #+begin_example
 agents-and-skills/                   ← this repo = the marketplace
@@ -318,10 +338,15 @@ agents-and-skills/                   ← this repo = the marketplace
 │           ├── run-init.sh
 │           └── log_subagent.py
 ├── tests/                           ← unit tests for the hook scripts
+├── tools/
+│   ├── build-docs.sh                ← org → Markdown generator
+│   └── org-links.lua                ← pandoc filter for heading links
+├── .github/workflows/docs.yml       ← checks that Markdown copies are current
 ├── docs/
-│   ├── design.org                   ← this document
-│   └── conventions.org              ← how to write agents, skills, plugins
-└── README.org                       ← installation and usage
+│   ├── design.org / design.md       ← this document (.md is generated)
+│   └── conventions.org / .md        ← how to write agents, skills, plugins
+├── CLAUDE.md                        ← rules for agents working on this repo
+└── README.org / README.md           ← installation and usage
 #+end_example
 
 Executables go into =scripts/= and not =bin/=, because claude.ai refuses
@@ -360,7 +385,8 @@ Development of this repository: test changes with
   capability plugins through their own hooks, without editing the core.
 
 * Implementation plan
-1. Marketplace and plugin skeleton, six agent prompts, =README.org=.
+1. Marketplace and plugin skeleton, six agent prompts, =README.org=
+   (with its generated =README.md=).
 2. Hooks: config guard, checkpoint hook and =run-init.sh=, with unit tests.
 3. Subagent log, =docs/conventions.org=, and an end-to-end smoke test with
    =--plugin-dir= (medium and large sample tasks).

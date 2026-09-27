@@ -1,0 +1,17 @@
+name: docs
+
+on:
+  push:
+    paths: ["**.org", "**.md", "tools/**", ".github/workflows/docs.yml"]
+  pull_request:
+    paths: ["**.org", "**.md", "tools/**", ".github/workflows/docs.yml"]
+
+jobs:
+  markdown-in-sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+      - name: Check generated Markdown
+        run: tools/build-docs.sh --check
