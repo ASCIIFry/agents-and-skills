@@ -1,0 +1,14 @@
+{
+  "name": "agents-and-skills",
+  "description": "Private plugins for task orchestration and, later, domain capabilities",
+  "owner": {
+    "name": "ASCIIFry"
+  },
+  "plugins": [
+    {
+      "name": "orchestrator",
+      "source": "./plugins/orchestrator",
+      "description": "Orchestrator agent pattern: a Sonnet orchestrator that plans, delegates to cheap worker agents, verifies and reports"
+    }
+  ]
+}
