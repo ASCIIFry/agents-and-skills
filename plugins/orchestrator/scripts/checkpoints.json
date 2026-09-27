@@ -1,0 +1,20 @@
+{
+  "_comment": "Bash commands that need the user's approval. Each pattern is a Python regex matched against one simple command (env assignments and wrappers such as sudo removed). Capability plugins add their own checkpoints in their own hooks.",
+  "checkpoints": [
+    {"pattern": "^git( -C \\S+)? push\\b", "reason": "pushes to a remote"},
+    {"pattern": "^git( -C \\S+)? reset\\b.*--hard", "reason": "discards local changes (reset --hard)"},
+    {"pattern": "^git( -C \\S+)? clean\\b.*-[a-zA-Z]*f", "reason": "deletes untracked files (git clean)"},
+    {"pattern": "^git( -C \\S+)? (checkout|restore)\\b.*(\\s--\\s+\\.|\\s\\.)$", "reason": "discards all working-tree changes"},
+    {"pattern": "^git( -C \\S+)? branch\\b.*(\\s-D\\b|--delete\\b.*--force|--force\\b.*--delete)", "reason": "force-deletes a branch"},
+    {"pattern": "^git( -C \\S+)? rebase\\b", "reason": "rewrites history (rebase)"},
+    {"pattern": "^git( -C \\S+)? (filter-branch|filter-repo)\\b", "reason": "rewrites history"},
+    {"pattern": "^git( -C \\S+)? stash (drop|clear)\\b", "reason": "deletes stashed changes"},
+    {"pattern": "^git( -C \\S+)? tag\\b.*\\s(-d|--delete)\\b", "reason": "deletes a tag"},
+    {"pattern": "^rm\\b.*\\s(-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\\b", "reason": "deletes recursively"},
+    {"pattern": "^gh (pr (create|merge|close|review)|release|repo (create|delete|edit|rename|archive))\\b", "reason": "acts on GitHub on the user's behalf"},
+    {"pattern": "^gh api\\b.*(-X|--method)\\s*(POST|PUT|PATCH|DELETE)\\b", "reason": "writes through the GitHub API"},
+    {"pattern": "^(npm|pnpm|yarn|bun) publish\\b", "reason": "publishes a package"},
+    {"pattern": "^(cargo publish|twine upload|gem push|poetry publish|uv publish)\\b", "reason": "publishes a package"},
+    {"pattern": "^docker (push|image push)\\b", "reason": "pushes a container image"}
+  ]
+}
