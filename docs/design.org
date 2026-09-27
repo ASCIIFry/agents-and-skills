@@ -3,8 +3,10 @@
 #+STARTUP: overview
 
 * Status
-Draft for review. Nothing in this document is implemented yet. The
-implementation starts after the design is approved; see [[Implementation plan]].
+Approved and implemented as version 0.1.0 of the =orchestrator= plugin.
+Installation and usage are in =README.org=. [[Verification results]]
+lists what was checked against the Claude Code documentation and CLI
+(v2.1.283) during implementation.
 
 * Goals and non-goals
 ** Goals
@@ -84,9 +86,10 @@ Notes:
 - "Bash (read-only use)" is enforced by prompt only. Claude Code has no
   read-only Bash mode per agent; the [[Config guard]] and
   [[Checkpoint hook]] still apply.
-- The =researcher= writes notes only below =.orchestrator/=. Web content
-  is untrusted input; the researcher returns facts with sources, never
-  instructions for other agents.
+- The =researcher= writes notes only below =.orchestrator/=. The
+  [[Config guard]] enforces this through the hook input's =agent_type=.
+  Web content is untrusted input; the researcher returns facts with
+  sources, never instructions for other agents.
 - Built-in =Explore= and =Plan= agents stay available. Own versions exist
   so that model, tools and output format are under our control.
 
@@ -239,18 +242,30 @@ commands that set =ORCHESTRATOR_RUN_STATE= are denied.
    layer.
 
 ** Config guard
-Matcher: =Edit|Write|NotebookEdit|Bash=. Protected paths:
-- =~/.claude/**= (user settings, agents, skills, plugin cache, the plugin itself)
-- =<project>/.claude/**=, =CLAUDE.md=, =CLAUDE.local.md=, =.mcp.json=
-- =<project>/.git/hooks/**=, =<project>/.git/config=
-- =<project>/.orchestrator/.gitignore=
+Matcher: =Edit|Write|MultiEdit|NotebookEdit|Bash=. Protected paths:
+- every =.claude/= directory (the project's, =~/.claude/= and nested ones,
+  including the plugin cache), except the first-level subdirectories
+  =worktrees/= (project files of worktree-isolated agents), =projects/=
+  (session data and auto memory) and =plans/= (plan mode)
+- =CLAUDE.md=, =CLAUDE.local.md=, =AGENTS.md=, =.mcp.json= and
+  =.claude.json= at any depth. Claude Code reads =AGENTS.md= as project
+  instructions too.
+- =.git/hooks/**=, =.git/config=, =~/.gitconfig=, =~/.config/git/**=
+- =.orchestrator/.gitignore=
+
+This overlaps on purpose with Claude Code's built-in protected paths
+(=.claude=, =.git=, =.mcp.json=, …). Those are never auto-approved, but in
+a prompting mode the user can still approve them. The guard denies them
+outright, and it covers files that are not built-in protected, such as
+=CLAUDE.md= and =AGENTS.md=.
 
 For file tools, the target path is resolved (symlinks, =..=) and matched.
 For Bash, the command is denied when it mentions a protected path together
 with a writing operation (redirection, =tee=, =sed -i=, =cp=, =mv=, =rm=,
 =ln=, =chmod=, =truncate=, interpreter one-liners). It is also denied when
-it runs =claude plugin …=, =claude config …=, =git config=, or sets
-=ORCHESTRATOR_RUN_STATE=.
+it runs =claude plugin|config|mcp|update|install=, a writing
+=git config=, a =core.hooksPath= override, or sets =ORCHESTRATOR_RUN_STATE=.
+If the hook fails internally, it denies (fail closed).
 
 Limitation, stated plainly: Bash analysis is a heuristic. A determined
 obfuscation, such as a generated script, can get past it. It stops the
@@ -263,10 +278,15 @@ Implementation: Python 3, standard library only, with unit tests.
 Matcher: =Bash=. It returns =permissionDecision: "ask"= (never "allow")
 for =git push=, =git reset --hard=, =git clean -f…=,
 =git branch -D=, =git rebase=, =rm -r…=, =gh pr create|merge=,
-=gh release …=, and similar outward-facing commands. The list lives
-in one data file so that later capability plugins can add their own
-checkpoints in their own hooks. Whether =ask= still prompts in
-=bypassPermissions= mode has to be verified (see [[Open points to verify]]).
+=gh release …=, package publishing, image pushes and similar
+outward-facing commands. The list lives in one data file
+(=scripts/checkpoints.json=); later capability plugins add their own
+checkpoints in their own hooks.
+
+Hook-forced prompts are shown in auto mode, the default starting mode since
+Claude Code v2.1.283. For =bypassPermissions= and =dontAsk= the docs don't
+guarantee a prompt, so in those modes the hook returns =deny= and tells the
+agent to ask the user to run the command.
 
 * Cost and context efficiency
 - Model tiering as in the [[Agent roster]]; =effort= per agent.
@@ -291,8 +311,9 @@ app. The plugin, hooks, local tools and run files all work unchanged,
 because everything runs on the Linux machine.
 
 #+begin_src sh
-claude --agent orchestrator     # then run /remote-control in the session
+claude --agent orchestrator --remote-control
 #+end_src
+Inside a running session, =/remote-control= does the same.
 
 The machine has to stay on while you steer the session from the phone.
 
@@ -340,8 +361,11 @@ agents-and-skills/                   ← this repo = the marketplace
 ├── tests/                           ← unit tests for the hook scripts
 ├── tools/
 │   ├── build-docs.sh                ← org → Markdown generator
-│   └── org-links.lua                ← pandoc filter for heading links
-├── .github/workflows/docs.yml       ← checks that Markdown copies are current
+│   ├── org-links.lua                ← pandoc filter for heading links
+│   └── subagent-stats.py            ← summarises the subagent log
+├── .github/workflows/
+│   ├── docs.yml                     ← checks that Markdown copies are current
+│   └── tests.yml                    ← hook tests and manifest validation
 ├── docs/
 │   ├── design.org / design.md       ← this document (.md is generated)
 │   └── conventions.org / .md        ← how to write agents, skills, plugins
@@ -356,14 +380,14 @@ plugins that contain a top-level =bin/=.
 Full steps go into =README.org=.
 1. Make sure git can reach the private repository without prompting:
    an SSH key loaded in =ssh-agent=, or =gh auth login && gh auth setup-git=.
-2. =claude plugin marketplace add asciifry/agents-and-skills=
-3. =claude plugin install orchestrator@<marketplace-name>=
+2. =claude plugin marketplace add ASCIIFry/agents-and-skills=
+3. =claude plugin install orchestrator@agents-and-skills=
 4. Optional: add the recommended =permissions.deny= rules to
    =~/.claude/settings.json=.
 5. Start with =claude --agent orchestrator=.
 
 Updates: the plugin's =version= is bumped on every release, then
-=claude plugin update orchestrator@<marketplace-name>=. Auto-update is
+=claude plugin update orchestrator@agents-and-skills=. Auto-update is
 off by default and can be enabled in =/plugin=.
 
 Development of this repository: test changes with
@@ -385,18 +409,25 @@ Development of this repository: test changes with
   capability plugins through their own hooks, without editing the core.
 
 * Implementation plan
-1. Marketplace and plugin skeleton, six agent prompts, =README.org=
-   (with its generated =README.md=).
+All steps are done in version 0.1.0:
+1. Marketplace and plugin skeleton, six agent prompts, =README.org=.
 2. Hooks: config guard, checkpoint hook and =run-init.sh=, with unit tests.
-3. Subagent log, =docs/conventions.org=, and an end-to-end smoke test with
-   =--plugin-dir= (medium and large sample tasks).
-4. Tag the first release (=version= 0.1.0).
+3. Subagent log, =tools/subagent-stats.py=, =docs/conventions.org=, CI.
+4. =version= 0.1.0 in =plugin.json=.
 
-* Open points to verify
-Verify these during implementation; the design adapts if needed.
-- =claude --agent orchestrator= resolves a plugin agent by its bare name
-  (the docs say it does, with =plugin:agent= to disambiguate).
-- Whether =permissionDecision: "ask"= still prompts under
-  =bypassPermissions= and =auto= mode.
-- The exact command to enable Remote Control from within a session.
-- Whether the =Agent= tool's =model= override is available for escalation.
+The end-to-end smoke test with a live session is described in =README.org=.
+It has to run on a machine with Claude Code credentials.
+
+* Verification results
+| Question                                             | Result                                                                                                      |
+|------------------------------------------------------+-------------------------------------------------------------------------------------------------------------|
+| =--agent= with a plugin agent                        | Supported; the bare name works, =plugin:agent= disambiguates                                                |
+| Hook =ask= in auto mode                              | Prompts; the docs state that auto mode still shows hook-forced prompts                                      |
+| Hook =ask= in =bypassPermissions= / =dontAsk=        | Not guaranteed, so the checkpoint hook denies in these modes                                                |
+| Remote Control                                       | =claude --remote-control= flag and =/remote-control= command                                                 |
+| Model override for escalation                        | The =Agent= tool accepts =model=                                                                            |
+| Plugin agent fields                                  | =tools=, =model=, =effort=, =maxTurns= honoured; =hooks=, =permissionMode=, =mcpServers= ignored          |
+| =${CLAUDE_PLUGIN_ROOT}= in agent prompts             | Substituted inline in the Markdown body                                                                     |
+| Context cost (=claude plugin details=)               | ~340 tokens always-on; orchestrator ~1.6k and workers ~0.3–0.5k on invoke                                   |
+| Edit deny rules and Bash                             | Also applied to Bash redirections and recognised file commands (=sed=, =tee=, …)                          |
+| Claude Code reads =AGENTS.md=                        | Yes, since v2.1.277, so it is protected like =CLAUDE.md=                                                   |
