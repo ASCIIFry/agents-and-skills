@@ -24,16 +24,52 @@ Plus hooks that protect your configuration, turn risky commands into approval pr
 ### Prerequisites
 
 - Claude Code on Linux, `git`, `python3` (standard library only).
-- Git access to this private repository without a prompt. Claude Code clones it non-interactively. Either:
-  - an SSH key loaded in `ssh-agent` (host already in `known_hosts`), or
-  - HTTPS with a stored credential: `gh auth login` and then `gh auth setup-git`.
+- Git access to this private repository without a prompt. Claude Code runs `git` non-interactively: a credential git would have to ask for makes the clone fail. Set up one of the two options in [Install the plugin](#install-the-plugin).
 
 ### Install the plugin
+
+#### Over HTTPS
+
+1.  Store a GitHub credential that git can use without prompting. Either use the GitHub CLI:
+
+    ``` bash
+    gh auth login          # choose HTTPS
+    gh auth setup-git      # makes gh git's credential helper for github.com
+    ```
+
+    or a fine-grained personal access token limited to this repository with *Contents: Read-only*, stored in a credential helper. `libsecret` keeps it encrypted in your keyring, but the helper may need installing first (Fedora: `git-credential-libsecret`; Debian/Ubuntu: build it from `/usr/share/doc/git/contrib/credential/libsecret`). `store` needs nothing extra but keeps the token in plain text in `~/.git-credentials`.
+
+    ``` bash
+    git config --global credential.helper libsecret   # or: store
+    printf 'protocol=https\nhost=github.com\nusername=ASCIIFry\npassword=%s\n' "$TOKEN" \
+      | git credential approve
+    ```
+
+2.  Check that the clone works without a prompt:
+
+    ``` bash
+    GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/ASCIIFry/agents-and-skills.git HEAD
+    ```
+
+3.  Add the marketplace with the full HTTPS URL and install the plugin:
+
+    ``` bash
+    claude plugin marketplace add https://github.com/ASCIIFry/agents-and-skills.git
+    claude plugin install orchestrator@agents-and-skills
+    ```
+
+The `owner/repo` shorthand tries SSH first and falls back to HTTPS. The full URL uses HTTPS directly. To keep the shorthand but skip the SSH probe, set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1`. To install from a branch other than the default branch, append `#<branch>` to the URL.
+
+#### Over SSH
+
+With a key loaded in `ssh-agent` and `github.com` in `known_hosts`:
 
 ``` bash
 claude plugin marketplace add ASCIIFry/agents-and-skills
 claude plugin install orchestrator@agents-and-skills
 ```
+
+#### Either way
 
 Install from GitHub, not from a local clone. A marketplace added from a local directory loads plugins in place, so an agent editing that clone would be editing its own live configuration. See [Security](#security).
 
@@ -160,7 +196,7 @@ Known limits:
     claude plugin update orchestrator@agents-and-skills
     ```
 
-Automatic updates are off by default. You can turn them on in `/plugin` → Marketplaces → agents-and-skills → Enable auto-update.
+Automatic updates are off by default. You can turn them on in `/plugin` → Marketplaces → agents-and-skills → Enable auto-update. Over HTTPS they need the stored credential from [Over HTTPS](#over-https). If git would have to prompt, the background update fails quietly and the installed copy stays as it is.
 
 ## Cost monitoring
 
