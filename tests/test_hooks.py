@@ -6,6 +6,7 @@ Each test runs a script as Claude Code would: JSON on stdin, decision on stdout.
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -69,6 +70,19 @@ class ConfigGuardTest(unittest.TestCase):
                                     agent_type="orchestrator:researcher"), "deny")
         self.assertIsNone(self.guard("Write", {"file_path": "src/x.py"},
                                      agent_type="orchestrator:implementer"))
+
+    def test_analyst_writes_only_spec_and_orchestrator(self):
+        for path in ["docs/requirements.org", ".orchestrator/artifacts/r/notes.org"]:
+            with self.subTest(path=path):
+                self.assertIsNone(self.guard("Write", {"file_path": path}, agent_type="orchestrator:analyst"))
+                self.assertIsNone(self.guard("Edit", {"file_path": path}, agent_type="analyst"))
+        for path in ["src/app.py", "docs/requirements.md", "docs/design.org", "requirements.org"]:
+            with self.subTest(path=path):
+                self.assertEqual(self.guard("Write", {"file_path": path},
+                                            agent_type="orchestrator:analyst"), "deny")
+
+    def test_scopes_apply_only_to_this_plugins_agents(self):
+        self.assertIsNone(self.guard("Write", {"file_path": "src/x.py"}, agent_type="other-plugin:analyst"))
 
     def test_bash_writes_to_protected_paths_denied(self):
         for command in [
@@ -231,6 +245,48 @@ class RunInitTest(unittest.TestCase):
     def test_invalid_input_rejected(self):
         self.assertEqual(self.run_init(slug="Bad Slug").returncode, 64)
         self.assertEqual(self.run_init(mode="sometimes").returncode, 64)
+
+
+@unittest.skipUnless(shutil.which("pandoc"), "pandoc not installed")
+class Org2MdTest(unittest.TestCase):
+    script = os.path.join(SCRIPTS, "org2md.sh")
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.org = os.path.join(self.tmp.name, "requirements.org")
+        with open(self.org, "w", encoding="utf-8") as fh:
+            fh.write("#+TITLE: Requirements: Demo\n* Goal\nSee [[Über Größe]].\n* Über Größe\nText.\n")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_script(self, *args, env=None):
+        return subprocess.run([shutil.which("bash"), self.script, *args], capture_output=True,
+                              text=True, env={**os.environ, **(env or {})})
+
+    def test_writes_markdown_with_working_links(self):
+        self.assertEqual(self.run_script(self.org).returncode, 0)
+        with open(self.org[:-4] + ".md", encoding="utf-8") as fh:
+            md = fh.read()
+        self.assertIn("Generated from requirements.org", md)
+        self.assertIn("# Requirements: Demo", md)
+        self.assertIn("[Über Größe](#über-größe)", md)
+
+    def test_check_mode(self):
+        self.assertEqual(self.run_script("--check", self.org).returncode, 1)
+        self.run_script(self.org)
+        self.assertEqual(self.run_script("--check", self.org).returncode, 0)
+
+    def test_rejects_non_org_files(self):
+        self.assertEqual(self.run_script(os.path.join(self.tmp.name, "x.md")).returncode, 64)
+
+    def test_missing_pandoc(self):
+        bindir = os.path.join(self.tmp.name, "bin")  # a PATH with dirname but no pandoc
+        os.mkdir(bindir)
+        os.symlink(shutil.which("dirname"), os.path.join(bindir, "dirname"))
+        proc = self.run_script(self.org, env={"PATH": bindir})
+        self.assertEqual(proc.returncode, 69)
+        self.assertIn("pandoc is not installed", proc.stderr)
 
 
 class SubagentLogTest(unittest.TestCase):

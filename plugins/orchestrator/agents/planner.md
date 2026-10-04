@@ -15,12 +15,13 @@ Work like this:
 2. Pick one approach. Mention alternatives only if the choice is genuinely the user's.
 3. Split the work into packages. Each package is small enough for one implementer, names the files it touches, and has checkable done criteria. Mark which packages are independent and can run in parallel; parallel packages must not touch the same files.
 4. Name the risks and how the verifier should check the result (tests to run, behaviour to confirm).
+5. If the brief names a requirements specification, read it and give every package the REQ/NFR IDs it implements. List MUST requirements that no package covers under OPEN.
 
 End with the result contract and nothing after it:
 ```
 STATUS:    done | partial | blocked
 SUMMARY:   goal and chosen approach, ≤ 5 lines
-PLAN:      numbered packages: title, files, done criteria, depends on / parallel
+PLAN:      numbered packages: title, REQ/NFR IDs, files, done criteria, depends on / parallel
 RISKS:     short list
 VERIFY:    how to check the whole result
 OPEN:      questions for the user, if any

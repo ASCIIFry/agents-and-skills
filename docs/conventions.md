@@ -1,4 +1,4 @@
-<!-- Generated from conventions.org by tools/build-docs.sh. Do not edit. -->
+<!-- Generated from conventions.org. Edit the .org file, not this one. -->
 
 # Conventions for agents, skills and plugins
 

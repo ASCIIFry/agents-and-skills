@@ -1,4 +1,4 @@
-<!-- Generated from design.org by tools/build-docs.sh. Do not edit. -->
+<!-- Generated from design.org. Edit the .org file, not this one. -->
 
 # Orchestrator Agent Pattern for Claude Code — Design
 
@@ -25,16 +25,17 @@ Approved and implemented as version 0.1.0 of the `orchestrator` plugin. Installa
 
 ## Decisions
 
-| \#  | Topic                | Decision                                                            |
-|-----|----------------------|---------------------------------------------------------------------|
-| 1   | Models               | Orchestrator: Sonnet. Planner: Opus. Workers: Haiku or Sonnet.      |
-| 2   | Activation           | Opt-in per session: `claude --agent orchestrator`                   |
-| 3   | Approval checkpoints | Plan of large tasks, pushes, destructive and outward-facing actions |
-| 4   | Run state            | Git-ignored by default; per-repo opt-in to commit it                |
-| 5   | Distribution         | Claude Code plugin in a private marketplace (this repository)       |
-| 6   | Mobile               | Remote Control of a local CLI session                               |
-| 7   | Hierarchy            | Flat: only the orchestrator delegates; workers have no `Agent` tool |
-| 8   | Documentation        | Org-mode is the source; Markdown copies are generated for mobile    |
+| \#  | Topic                | Decision                                                                                                                             |
+|-----|----------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| 1   | Models               | Orchestrator: Sonnet. Planner: Opus. Workers: Haiku or Sonnet.                                                                       |
+| 2   | Activation           | Opt-in per session: `claude --agent orchestrator`                                                                                    |
+| 3   | Approval checkpoints | Plan of large tasks, pushes, destructive and outward-facing actions                                                                  |
+| 4   | Run state            | Git-ignored by default; per-repo opt-in to commit it                                                                                 |
+| 5   | Distribution         | Claude Code plugin in a private marketplace (this repository)                                                                        |
+| 6   | Mobile               | Remote Control of a local CLI session                                                                                                |
+| 7   | Hierarchy            | Flat: only the orchestrator delegates; workers have no `Agent` tool                                                                  |
+| 8   | Documentation        | Org-mode is the source; Markdown copies are generated for mobile                                                                     |
+| 9   | Requirements         | One `analyst` agent (Opus) plus a `requirements` skill; spec in `docs/requirements.org` with an `.md` copy, approved before planning |
 
 ## Architecture overview
 
@@ -43,13 +44,14 @@ Approved and implemented as version 0.1.0 of the `orchestrator` plugin. Installa
                          │
                          ▼
 ┌──────────────── orchestrator (main session, Sonnet) ───────────────┐
-│ classify → plan → approve → delegate → verify → report             │
+│ classify → specify → plan → approve → delegate → verify → report   │
 │ run state: .orchestrator/runs/<id>.org                             │
-└───┬──────────┬──────────────┬──────────────┬──────────────┬────────┘
-    ▼          ▼              ▼              ▼              ▼
-explorer    planner       implementer     verifier      researcher
-(Haiku)     (Opus)        (Sonnet)        (Sonnet)      (Haiku)
-read-only   read-only     read + write    read + tests  web + read
+└──┬─────────┬─────────┬───────────┬────────────┬────────────┬───────┘
+   ▼         ▼         ▼           ▼            ▼            ▼
+analyst   explorer  planner   implementer   verifier    researcher
+(Opus)    (Haiku)   (Opus)    (Sonnet)      (Sonnet)    (Haiku)
+writes    read-only read-only read + write  read + tests web + read
+the spec
 
 plugin hooks (apply to the main session AND to every subagent):
   PreToolUse  → config-guard  (deny edits to configuration)
@@ -63,20 +65,21 @@ The orchestrator is the **main session**, started with `--agent`. Its prompt rep
 
 All agents live in the plugin's `agents/` directory. Plugin agents ignore the frontmatter fields `hooks`, `permissionMode` and `mcpServers`, so all guardrails are plugin-level hooks (see [Security](#security)). The `tools` list is honoured and is the main least-privilege lever.
 
-| Agent        | Model  | Effort | Tools                                         | Purpose                                               |
-|--------------|--------|--------|-----------------------------------------------|-------------------------------------------------------|
-| orchestrator | sonnet | medium | all (main session)                            | Classify, plan small tasks, delegate, verify, report  |
-| planner      | opus   | high   | Read, Grep, Glob, Bash (read-only use)        | Break large tasks into work packages with DoD         |
-| explorer     | haiku  | low    | Read, Grep, Glob, Bash (read-only use)        | Locate code/files, gather facts cheaply               |
-| implementer  | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash           | Carry out exactly one bounded work package            |
-| verifier     | sonnet | medium | Read, Grep, Glob, Bash                        | Independent check: tests, review, "is it really done" |
-| researcher   | haiku  | low    | WebSearch, WebFetch, Read, Write (notes only) | External information: docs, APIs, advisories          |
+| Agent        | Model  | Effort | Tools                                           | Purpose                                               |
+|--------------|--------|--------|-------------------------------------------------|-------------------------------------------------------|
+| orchestrator | sonnet | medium | all (main session)                              | Classify, plan small tasks, delegate, verify, report  |
+| analyst      | opus   | high   | Read, Grep, Glob, Bash, Write, Edit (spec only) | Requirements spec and open questions before planning  |
+| planner      | opus   | high   | Read, Grep, Glob, Bash (read-only use)          | Break large tasks into work packages with DoD         |
+| explorer     | haiku  | low    | Read, Grep, Glob, Bash (read-only use)          | Locate code/files, gather facts cheaply               |
+| implementer  | sonnet | medium | Read, Grep, Glob, Edit, Write, Bash             | Carry out exactly one bounded work package            |
+| verifier     | sonnet | medium | Read, Grep, Glob, Bash                          | Independent check: tests, review, "is it really done" |
+| researcher   | haiku  | low    | WebSearch, WebFetch, Read, Write (notes only)   | External information: docs, APIs, advisories          |
 
 Notes:
 
 - No worker has the `Agent` tool, which enforces the flat hierarchy.
 - "Bash (read-only use)" is enforced by prompt only. Claude Code has no read-only Bash mode per agent; the [Config guard](#config-guard) and [Checkpoint hook](#checkpoint-hook) still apply.
-- The `researcher` writes notes only below `.orchestrator/`. The [Config guard](#config-guard) enforces this through the hook input's `agent_type`. Web content is untrusted input; the researcher returns facts with sources, never instructions for other agents.
+- The `researcher` writes notes only below `.orchestrator/`, the `analyst` only `docs/requirements.org` and below `.orchestrator/`. The [Config guard](#config-guard) enforces both through the hook input's `agent_type`. Web content is untrusted input; the researcher returns facts with sources, never instructions for other agents.
 - Built-in `Explore` and `Plan` agents stay available. Own versions exist so that model, tools and output format are under our control.
 
 ## Orchestrator
@@ -84,11 +87,12 @@ Notes:
 ### Workflow
 
 1.  **Classify** the request (see [Delegation policy](#delegation-policy)).
-2.  **Plan**: trivial tasks need no plan. Medium tasks get a short plan in the conversation. Large tasks go to the `planner`.
-3.  **Approve**: for large tasks, present the plan (goal, work packages, risks, estimated effort) and wait for explicit approval.
-4.  **Delegate**: one task brief per work package (see [Task brief](#task-brief)). Independent packages run in parallel. Parallel writers run with worktree isolation (the `Agent` tool's `isolation: worktree`), or on strictly disjoint files.
-5.  **Verify**: the `verifier` checks the combined result against the definition of done. Failures go back to step 4 (see [Failure handling](#failure-handling)).
-6.  **Report**: a short summary (what changed, how it was verified, open points), and the run file is updated.
+2.  **Specify**: for a new project, or a large task whose goal or scope is unclear, run the [Requirements analysis](#requirements-analysis) first. The planner then works from the approved specification.
+3.  **Plan**: trivial tasks need no plan. Medium tasks get a short plan in the conversation. Large tasks go to the `planner`.
+4.  **Approve**: for large tasks, present the plan (goal, work packages, risks, estimated effort) and wait for explicit approval.
+5.  **Delegate**: one task brief per work package (see [Task brief](#task-brief)). Independent packages run in parallel. Parallel writers run with worktree isolation (the `Agent` tool's `isolation: worktree`), or on strictly disjoint files.
+6.  **Verify**: the `verifier` checks the combined result against the definition of done and, if a specification exists, against the acceptance criteria of the requirements in scope. Failures go back to step 5 (see [Failure handling](#failure-handling)).
+7.  **Report**: a short summary (what changed, how it was verified, open points), and the run file is updated.
 
 ### Delegation policy
 
@@ -99,6 +103,7 @@ Every subagent starts with an empty context and has to rebuild it, so delegation
 | Trivial | question answerable from context, one-file change, fewer than ~5 tool calls | Orchestrator does it itself                                         |
 | Medium  | a few files, clear goal, low risk                                           | Optional explorer → implementer → verifier; no plan approval        |
 | Large   | many files, unclear approach, risky, or several independent packages        | planner → approval → implementers (parallel if possible) → verifier |
+| Project | new project, or large with unclear goal, scope or users                     | analyst ⇄ user → spec approval → then as Large                      |
 
 Additional rules:
 
@@ -144,12 +149,47 @@ Large outputs (logs, long search results, research notes) are written to `.orche
 
 | Checkpoint                                         | Enforced by                                          |
 |----------------------------------------------------|------------------------------------------------------|
+| Requirements specification (Project class)         | Orchestrator prompt (`AskUserQuestion`)              |
 | Plan of a large task                               | Orchestrator prompt (`AskUserQuestion`)              |
 | `git push`, history rewrites, branch deletion      | [Checkpoint hook](#checkpoint-hook) (`ask` decision) |
 | Recursive deletes, `git clean`, `git reset --hard` | [Checkpoint hook](#checkpoint-hook)                  |
 | Outward-facing actions (PR create/merge, releases) | [Checkpoint hook](#checkpoint-hook)                  |
 
 Approval prompts are short enough to answer on a phone.
+
+## Requirements analysis
+
+### Why
+
+The planner decides *how* to build something. Without an explicit *what* and *why*, the agents may build the wrong thing efficiently. Requirements analysis runs before planning for new projects and for large tasks with an unclear goal, never for trivial or medium tasks.
+
+### One analyst, not two
+
+Business analysis (goal, value, scope, stakeholders) and requirements engineering (requirements, acceptance criteria, quality attributes) overlap heavily in solo projects. Splitting them into two agents would add a handoff, with lost context and a second cold start, for little gain. So there is one `analyst` agent (Opus, high effort: it runs rarely and has the largest effect on quality). Its method and template live in the `requirements` skill, which the analyst preloads and which a normal session can also use directly.
+
+### The question loop
+
+Subagents cannot ask the user (`AskUserQuestion` is removed for them), and each run returns a single result. Elicitation is therefore split:
+
+1.  The orchestrator briefs the `analyst` with the request and any known context.
+2.  The analyst reads the existing code and docs, writes a draft specification, and returns at most 5 questions. Each question has 2–4 options, the recommended one first, so it maps directly onto `AskUserQuestion` and can be answered on a phone.
+3.  The orchestrator asks the user and passes the answers back. It continues the same analyst if the session allows it; otherwise it starts a new one that reads the draft.
+4.  After at most two question rounds, anything still unclear becomes an explicit assumption in the specification instead of another question.
+5.  The orchestrator shows a short summary (goal, scope and non-goals, number of requirements, key quality requirements, assumptions) and asks for approval. Only then does the planner start.
+
+### The specification
+
+`docs/requirements.org` in the project repository. It is long-lived project knowledge and is versioned with the code, unlike run files. Contents: goal and value, scope and non-goals, stakeholders and users, functional requirements with stable IDs (`REQ-001`), MoSCoW priority and testable acceptance criteria, quality requirements (`NFR-001`), constraints, assumptions, risks, open points, and a change log.
+
+The analyst generates `docs/requirements.md` next to it with the plugin's `org2md.sh` (pandoc and the same Lua filter as this repository's docs). If pandoc is not installed, it skips the copy and reports that.
+
+For a later change, the analyst updates the existing specification instead of replacing it: new IDs for new requirements, retired IDs are never reused, and each change gets a change-log entry.
+
+### Traceability
+
+- The planner maps every work package to the REQ/NFR IDs it implements and lists requirements that no package covers.
+- Task briefs for implementers name the IDs in scope.
+- The verifier judges each acceptance criterion of the IDs in scope.
 
 ## Run state
 
@@ -234,7 +274,7 @@ Hook-forced prompts are shown in auto mode, the default starting mode since Clau
 - Model tiering as in the [Agent roster](#agent-roster); `effort` per agent.
 - Delegation policy prevents spawning for trivial work.
 - Compact briefs and results; large output goes to files.
-- Short, stable prompts: orchestrator ≲ 2 000 tokens, workers ≲ 600 tokens each. Stable prefixes improve prompt caching.
+- Short, stable prompts: orchestrator ≈ 2 100 tokens, workers ≲ 600 tokens each. The `requirements` skill (≈ 1 400 tokens) loads only into the analyst. Stable prefixes improve prompt caching.
 - Agent `description` fields are one or two lines each; the orchestrator sees all of them on every turn.
 - No MCP servers in the core plugin.
 - **Subagent log**: `SubagentStart` and `SubagentStop` hooks append timestamp, session, agent type and agent id to `${CLAUDE_PLUGIN_DATA}/subagents.jsonl`. That gives call counts and durations per agent for tuning. Token-level cost comes from Claude Code's own usage reporting.
@@ -255,7 +295,7 @@ The machine has to stay on while you steer the session from the phone.
 
 All human-facing documents are written in org-mode. The Claude mobile app and GitHub's mobile view do not render org well, so every `.org` file gets a generated `.md` copy next to it (`README.org` → `README.md`, `docs/design.org` → `docs/design.md`).
 
-- Generator: `tools/build-docs.sh`, which runs pandoc with the Lua filter `tools/org-links.lua`. The filter turns in-file heading links (`[[Heading]]`) into working GitHub anchors, umlauts included.
+- Generator: `tools/build-docs.sh`, which runs the plugin's `org2md.sh` (pandoc with the Lua filter `org-links.lua`) on every `.org` file. The analyst uses the same script for requirements specifications in projects. The filter turns in-file heading links (`[[Heading]]`) into working GitHub anchors, umlauts included.
 - The `.md` files carry a "Generated … Do not edit" header. Changes are always made in the `.org` file, then `tools/build-docs.sh` is run and both files are committed together.
 - CI (`.github/workflows/docs.yml`) runs `tools/build-docs.sh --check` and fails if a Markdown copy is out of date.
 - The repository's `CLAUDE.md` states this rule, so agents working on this repository follow it too.
@@ -272,22 +312,25 @@ agents-and-skills/                   ← this repo = the marketplace
 │       ├── .claude-plugin/plugin.json
 │       ├── agents/
 │       │   ├── orchestrator.md
+│       │   ├── analyst.md
 │       │   ├── planner.md
 │       │   ├── explorer.md
 │       │   ├── implementer.md
 │       │   ├── verifier.md
 │       │   └── researcher.md
+│       ├── skills/requirements/SKILL.md
 │       ├── hooks/hooks.json
 │       └── scripts/
 │           ├── config_guard.py
 │           ├── checkpoint.py
 │           ├── checkpoints.json
 │           ├── run-init.sh
+│           ├── org2md.sh            ← org → Markdown (pandoc)
+│           ├── org-links.lua        ← pandoc filter for heading links
 │           └── log_subagent.py
 ├── tests/                           ← unit tests for the hook scripts
 ├── tools/
-│   ├── build-docs.sh                ← org → Markdown generator
-│   ├── org-links.lua                ← pandoc filter for heading links
+│   ├── build-docs.sh                ← runs org2md.sh on all .org files
 │   └── subagent-stats.py            ← summarises the subagent log
 ├── .github/workflows/
 │   ├── docs.yml                     ← checks that Markdown copies are current
@@ -318,6 +361,7 @@ Development of this repository: test changes with `claude --plugin-dir ./plugins
 ## Extensibility
 
 - **Capabilities as separate plugins** in the same marketplace, for example `cloud-security`, `pentest`, `docs`. Each ships skills (knowledge, loaded on demand) and, only where needed, specialist agents.
+- Domain plugins can extend [Requirements analysis](#requirements-analysis) with their own skills: for example, scoping and rules of engagement for a pentest, target tenants and compliance framework for a cloud assessment, or audience and purpose for documentation.
 - The orchestrator routes by agent descriptions. Claude Code lists every enabled agent to it, so new agents need no change to the core.
 - Rules for new components go in `docs/conventions.org`:
   - agents: least-privilege `tools`, no `Agent` tool, result contract, one-to-two-line description
@@ -327,7 +371,9 @@ Development of this repository: test changes with `claude --plugin-dir ./plugins
 
 ## Implementation plan
 
-All steps are done in version 0.1.0:
+Version 0.2.0 adds the [Requirements analysis](#requirements-analysis): the `analyst` agent, the `requirements` skill, `org2md.sh`, the analyst's write scope in the config guard, and the matching changes to the orchestrator, planner and verifier.
+
+Version 0.1.0:
 
 1.  Marketplace and plugin skeleton, six agent prompts, `README.org`.
 2.  Hooks: config guard, checkpoint hook and `run-init.sh`, with unit tests.
@@ -338,15 +384,17 @@ The end-to-end smoke test with a live session is described in `README.org`. It h
 
 ## Verification results
 
-| Question                                      | Result                                                                                           |
-|-----------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `--agent` with a plugin agent                 | Supported; the bare name works, `plugin:agent` disambiguates                                     |
-| Hook `ask` in auto mode                       | Prompts; the docs state that auto mode still shows hook-forced prompts                           |
-| Hook `ask` in `bypassPermissions` / `dontAsk` | Not guaranteed, so the checkpoint hook denies in these modes                                     |
-| Remote Control                                | `claude --remote-control` flag and `/remote-control` command                                     |
-| Model override for escalation                 | The `Agent` tool accepts `model`                                                                 |
-| Plugin agent fields                           | `tools`, `model`, `effort`, `maxTurns` honoured; `hooks`, `permissionMode`, `mcpServers` ignored |
-| `${CLAUDE_PLUGIN_ROOT}` in agent prompts      | Substituted inline in the Markdown body                                                          |
-| Context cost (`claude plugin details`)        | ~340 tokens always-on; orchestrator ~1.6k and workers ~0.3–0.5k on invoke                        |
-| Edit deny rules and Bash                      | Also applied to Bash redirections and recognised file commands (`sed`, `tee`, …)                 |
-| Claude Code reads `AGENTS.md`                 | Yes, since v2.1.277, so it is protected like `CLAUDE.md`                                         |
+| Question                                       | Result                                                                                                     |
+|------------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| `--agent` with a plugin agent                  | Supported; the bare name works, `plugin:agent` disambiguates                                               |
+| Hook `ask` in auto mode                        | Prompts; the docs state that auto mode still shows hook-forced prompts                                     |
+| Hook `ask` in `bypassPermissions` / `dontAsk`  | Not guaranteed, so the checkpoint hook denies in these modes                                               |
+| Remote Control                                 | `claude --remote-control` flag and `/remote-control` command                                               |
+| Model override for escalation                  | The `Agent` tool accepts `model`                                                                           |
+| Plugin agent fields                            | `tools`, `model`, `effort`, `maxTurns` honoured; `hooks`, `permissionMode`, `mcpServers` ignored           |
+| `${CLAUDE_PLUGIN_ROOT}` in agent prompts       | Substituted inline in the Markdown body                                                                    |
+| Context cost (`claude plugin details`), v0.2.0 | ~520 tokens always-on; orchestrator ~2.1k, analyst ~0.55k + skill ~1.4k, other workers ~0.3–0.5k on invoke |
+| Edit deny rules and Bash                       | Also applied to Bash redirections and recognised file commands (`sed`, `tee`, …)                           |
+| Claude Code reads `AGENTS.md`                  | Yes, since v2.1.277, so it is protected like `CLAUDE.md`                                                   |
+| `AskUserQuestion` in subagents                 | Not available; the orchestrator runs the question loop                                                     |
+| Preloading a plugin skill into an agent        | `skills: [<plugin>:<skill>]`; the full skill content is injected at spawn                                  |

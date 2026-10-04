@@ -2,9 +2,9 @@ name: docs
 
 on:
   push:
-    paths: ["**.org", "**.md", "tools/**", ".github/workflows/docs.yml"]
+    paths: ["**.org", "**.md", "tools/**", "plugins/orchestrator/scripts/org*", ".github/workflows/docs.yml"]
   pull_request:
-    paths: ["**.org", "**.md", "tools/**", ".github/workflows/docs.yml"]
+    paths: ["**.org", "**.md", "tools/**", "plugins/orchestrator/scripts/org*", ".github/workflows/docs.yml"]
 
 jobs:
   markdown-in-sync:

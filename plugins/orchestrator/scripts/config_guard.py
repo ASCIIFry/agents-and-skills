@@ -25,6 +25,13 @@ FILE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # plans hold Claude Code's own session data and memory).
 CLAUDE_DIR_EXEMPT = {"worktrees", "projects", "plans"}
 
+# Agents of this plugin whose file writes are limited to these project paths
+# (a directory allows everything below it).
+AGENT_WRITE_SCOPES = {
+    "researcher": [".orchestrator"],
+    "analyst": [".orchestrator", "docs/requirements.org"],
+}
+
 PROTECTED_BASENAMES = {"CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", ".mcp.json", ".claude.json", ".gitconfig"}
 
 # Commands whose arguments are all write targets.
@@ -90,11 +97,24 @@ def check_file_tool(tool_name, tool_input, cwd, agent_type):
     reason = is_protected(path)
     if reason:
         return f"{tool_name} on {target} is not allowed: {reason}. Propose the change to the user instead."
-    if agent_type and agent_type.split(":")[-1] == "researcher":
-        allowed = resolve(".orchestrator", project_dir(cwd))
-        if not (path == allowed or path.startswith(allowed + os.sep)):
-            return f"the researcher may write only below .orchestrator/, not {target}."
+    scopes = write_scopes(agent_type)
+    if scopes is not None:
+        root = project_dir(cwd)
+        allowed = [resolve(scope, root) for scope in scopes]
+        if not any(path == a or path.startswith(a + os.sep) for a in allowed):
+            name = agent_type.split(":")[-1]
+            return f"the {name} may write only {', '.join(scopes)}, not {target}."
     return None
+
+
+def write_scopes(agent_type):
+    """Write scopes for this plugin's restricted agents, else None."""
+    if not agent_type:
+        return None
+    plugin, _, name = agent_type.rpartition(":")
+    if plugin not in ("", "orchestrator"):
+        return None
+    return AGENT_WRITE_SCOPES.get(name)
 
 
 def project_dir(cwd):

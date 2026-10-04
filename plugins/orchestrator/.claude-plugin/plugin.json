@@ -1,11 +1,11 @@
 {
   "name": "orchestrator",
-  "version": "0.1.0",
-  "description": "Orchestrator agent pattern: classify, plan, delegate to worker agents, verify, report. Start with `claude --agent orchestrator`.",
+  "version": "0.2.0",
+  "description": "Orchestrator agent pattern: classify, specify requirements, plan, delegate to worker agents, verify, report. Start with `claude --agent orchestrator`.",
   "author": {
     "name": "ASCIIFry"
   },
   "repository": "https://github.com/ASCIIFry/agents-and-skills",
   "license": "UNLICENSED",
-  "keywords": ["orchestration", "subagents", "planning"]
+  "keywords": ["orchestration", "subagents", "planning", "requirements"]
 }

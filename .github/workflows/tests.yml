@@ -9,7 +9,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Hook unit tests
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+      - name: Hook and script unit tests
         run: python3 -m unittest discover -s tests -v
   plugin-manifests:
     runs-on: ubuntu-24.04

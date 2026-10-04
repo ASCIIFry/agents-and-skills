@@ -12,20 +12,24 @@ agents, skills and plugins are in =docs/conventions.org=.
 | Agent        | Model  | Can write            | Job                                                  |
 |--------------+--------+----------------------+------------------------------------------------------|
 | orchestrator | Sonnet | yes (main session)   | Classify, plan, delegate, verify, report             |
+| analyst      | Opus   | only the spec        | Requirements spec and questions before planning      |
 | planner      | Opus   | no                   | Work packages with done criteria for large tasks     |
 | explorer     | Haiku  | no                   | Cheap code search, returns facts with =path:line=    |
 | implementer  | Sonnet | yes                  | Exactly one work package                             |
 | verifier     | Sonnet | no                   | Independent check: tests, diff review, done criteria |
 | researcher   | Haiku  | only =.orchestrator/= | Web research with sources                            |
 
-Plus hooks that protect your configuration, turn risky commands into approval
+Plus the =requirements= skill (method and template for specifications), and
+hooks that protect your configuration, turn risky commands into approval
 prompts, and log subagent runs. With the plugin enabled, every session pays
-about 340 tokens for the agent descriptions. The orchestrator's prompt
-(about 1 600 tokens) loads only when you start it.
+about 520 tokens for the agent and skill descriptions. The orchestrator's
+prompt (about 2 100 tokens) loads only when you start it, and a requirements
+analysis adds about 2 000 tokens per analyst run.
 
 * Installation
 ** Prerequisites
 - Claude Code on Linux, =git=, =python3= (standard library only).
+- Optional: =pandoc=, for the Markdown copy of requirements specifications.
 - Git access to this private repository without a prompt. Claude Code runs
   =git= non-interactively: a credential git would have to ask for makes the
   clone fail. Set up one of the two options in [[Install the plugin]].
@@ -134,9 +138,31 @@ available there.
 | Trivial   | "What does this function return?"        | The orchestrator answers or edits directly                     |
 | Medium    | "Add input validation to the login form" | explorer → implementer → verifier, short plan in the reply     |
 | Large     | "Migrate the API client to v2"           | planner → *your approval* → implementers → verifier → report   |
+| Project   | "Build a tool that tracks my findings"   | analyst ⇄ you → *spec approval* → then as Large                |
 
 You are also asked before any =git push=, history rewrite, recursive delete,
 PR or release action, or package publish.
+
+* Requirements specification
+For a new project, or a large task whose goal or scope is unclear, the
+orchestrator runs a requirements analysis before planning:
+
+1. The =analyst= (Opus) reads the existing code and docs and writes a draft of
+   =docs/requirements.org=.
+2. You get at most 5 questions per round, each with a recommended answer,
+   easy to answer on the phone. Everything that doesn't change scope, effort,
+   risk or architecture becomes a documented assumption instead of a question.
+   There are at most two rounds.
+3. You see a short summary and approve the specification. Only then does the
+   =planner= start. It maps every work package to the requirement IDs
+   (=REQ-001=, =NFR-001=), and the =verifier= checks their acceptance criteria.
+
+The specification lives in the project and is committed with the code, unlike
+run files. The analyst also writes =docs/requirements.md= for reading on your
+phone; this needs =pandoc=. Later changes update the same file: new IDs for new
+requirements, retired IDs are never reused, and a change log records what
+changed. The method alone is also available in any session as the
+=requirements= skill.
 
 * Run state
 For medium and large tasks the orchestrator keeps a run file in the
@@ -257,4 +283,7 @@ Claude Code's own =/cost= and =/usage=.
 3. Ask it to "add a deny rule to .claude/settings.json". The config guard
    should block the edit, and the orchestrator should propose a diff instead.
 4. Ask it to push. You should get an approval prompt.
-5. Run =tools/subagent-stats.py= and check that the runs from step 2 appear.
+5. Describe a small new project in two sentences. The =analyst= should return
+   questions, the orchestrator should ask them with options, and
+   =docs/requirements.org= and =.md= should appear for your approval.
+6. Run =tools/subagent-stats.py= and check that the runs from steps 2 and 5 appear.
