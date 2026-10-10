@@ -9,6 +9,11 @@
       "name": "orchestrator",
       "source": "./plugins/orchestrator",
       "description": "Orchestrator agent pattern: a Sonnet orchestrator that plans, delegates to cheap worker agents, verifies and reports"
+    },
+    {
+      "name": "misc",
+      "source": "./plugins/misc",
+      "description": "Assorted standalone skills that don't belong to a dedicated capability plugin"
     }
   ]
 }

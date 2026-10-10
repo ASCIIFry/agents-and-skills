@@ -1,0 +1,11 @@
+{
+  "name": "misc",
+  "version": "0.1.0",
+  "description": "Assorted standalone skills that don't belong to a dedicated capability plugin",
+  "author": {
+    "name": "ASCIIFry"
+  },
+  "repository": "https://github.com/ASCIIFry/agents-and-skills",
+  "license": "UNLICENSED",
+  "keywords": ["misc", "skills"]
+}
