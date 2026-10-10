@@ -44,9 +44,15 @@ a recipe came from.
    implies a precision the original recipe doesn't have (a "cup" of chopped
    vegetables isn't a precise volume), so those stay as the reader found
    them.
-4. **Save the file** with a kebab-case filename derived from the recipe
-   title (e.g. `kidneybohnen-erdnuss-eintopf.org`) in the directory the
-   user named, or in the current working directory if they named none.
+4. **Save the file** as `<YYYYMMDDHHMMSS>-<slug>.org`, the org-roam
+   naming convention (e.g. `20261010204953-kidneybohnen_erdnuss_eintopf.org`),
+   in the directory the user named, or in the current working directory if
+   they named none. The timestamp is the current local time, the same moment
+   as `#+created`: use the one given in the request if there is one,
+   otherwise run `date '+%Y%m%d%H%M%S'`. The slug is the title in lower case,
+   with diacritics stripped (ä→a, ö→o, ü→u) and every run of characters other
+   than letters and digits replaced by a single `_`, without leading or
+   trailing `_` (same rule as `org-roam-node-slug`).
    Don't ask where to save it: the skill may run non-interactively (e.g. in
    a CI/CD container), so the working directory is the default. Finish by
    reporting the file's path.
@@ -54,9 +60,9 @@ a recipe came from.
 ## Template
 
 ```org
-#+TITLE: <Rezeptname>
-#+AUTHOR: <Website- oder Autorenname, falls bekannt, sonst weglassen>
-#+DATE: [<heutiges Datum, YYYY-MM-DD>]
+#+title: <Rezeptname>
+#+created: [<YYYY-MM-DD Day HH:MM>]
+#+filetags: :rezept:
 
 Portionen: <n> | <Zeitangabe, falls vorhanden>
 
@@ -90,8 +96,13 @@ flat, unindented list also parses.
 
 Notes on filling it in:
 
-- Drop the `#+AUTHOR` line entirely if no author/site name is available, and
-  drop the parts of the "Portionen: ... |" line that aren't given (e.g. no
+- **Header**: exactly these three keyword lines, lower case, in this order.
+  `#+created` is an inactive Org timestamp with the English weekday
+  abbreviation, e.g. `[2026-10-10 Sat 20:49]`, same moment as the filename
+  timestamp. Don't add other keywords (`#+AUTHOR`, `#+DATE`, ...), an
+  org-roam `:ID:` drawer or a `#+template:` line; a calling pipeline adds
+  the org-roam parts.
+- Drop the parts of the "Portionen: ... |" line that aren't given (e.g. no
   time found: just "Portionen: 4"; neither found: omit the line).
 - **Source URL**: the recipe's URL is not a top-level `#+PROPERTY:`. It goes
   into an Org properties drawer directly under the `* Zutaten` heading

@@ -1,6 +1,6 @@
 {
   "name": "misc",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Assorted standalone skills that don't belong to a dedicated capability plugin",
   "author": {
     "name": "ASCIIFry"
